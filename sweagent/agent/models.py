@@ -428,6 +428,7 @@ class InstantEmptySubmitTestModel(AbstractModel):
 class LiteLLMModel(AbstractModel):
     def __init__(self, args: GenericAPIModelConfig, tools: ToolConfig):
         """Model served by the `litellm` library."""
+        self.logger = get_logger("swea-lm", emoji="🤖")
         self.args = args
         self.stats = InstanceStats()
         self.tools = tools
@@ -435,9 +436,17 @@ class LiteLLMModel(AbstractModel):
             if not litellm.utils.supports_function_calling(model=self.args.name):
                 msg = f"Model {self.args.name} does not support function calling"
                 raise ValueError(msg)
-        self.model_max_input_tokens = litellm.model_cost.get(self.args.name, {}).get("max_input_tokens")
-        self.model_max_output_tokens = litellm.model_cost.get(self.args.name, {}).get("max_output_tokens")
-        self.lm_provider = litellm.model_cost[self.args.name]["litellm_provider"]
+        if self.args.name in litellm.model_cost:
+            model_info = litellm.model_cost.get(self.args.name, {})
+            self.model_max_input_tokens = model_info.get("max_input_tokens")
+            self.model_max_output_tokens = model_info.get("max_output_tokens")
+            self.lm_provider = model_info.get("litellm_provider")
+        else:
+            # Custom model not in litellm.model_cost
+            self.logger.warning(f"Model {self.args.name} not found in litellm.model_cost. Skipping cost calculations.")
+            self.model_max_input_tokens = None
+            self.model_max_output_tokens = None
+            self.lm_provider = None
         self.logger = get_logger("swea-lm", emoji="🤖")
 
     def _update_stats(self, *, input_tokens: int, output_tokens: int, cost: float) -> None:
